@@ -16,6 +16,12 @@ const httpServer = http.createServer((req, res) => {
     res.end('ok');
     return;
   }
+  if (req.url === '/players') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    const playerList = Array.from(players.values()).map(p => ({ name: p.name, id: p.id, color: p.color }));
+    res.end(JSON.stringify({ count: players.size, players: playerList }, null, 2));
+    return;
+  }
   res.writeHead(200, { 'content-type': 'text/plain' });
   res.end('dinoVR server');
 });
@@ -30,6 +36,8 @@ io.on('connection', (socket) => {
   const player: Player = { id: socket.id, pos: [0, 1.2, 0], vel: [0,0,0], quat: [0,0,0,1], color, name, input: { t: Date.now(), thrust: [0,0,0], fast: false, turn: 0 } };
   players.set(socket.id, player);
 
+  console.log(`[server] Player connected: ${name} (${socket.id}) - Total players: ${players.size}`);
+  
   socket.emit('welcome', { id: socket.id, name, color });
   io.emit('snapshot', snapshot());
 
@@ -46,7 +54,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    const player = players.get(socket.id);
     players.delete(socket.id);
+    console.log(`[server] Player disconnected: ${player?.name || 'unknown'} (${socket.id}) - Total players: ${players.size}`);
     io.emit('snapshot', snapshot());
   });
 });
