@@ -23,6 +23,11 @@ document.body.appendChild(VRButton.createButton(renderer));
 // Rig: move the rig to locomote; camera is a child
 const rig = new THREE.Group();
 rig.position.set(0, 1.6, 3);
+
+// Position camera for third-person view (behind and above the player)
+camera.position.set(0, 1.5, 3); // Slightly behind and up
+camera.lookAt(0, 1.2, 0); // Look at player height
+
 rig.add(camera);
 scene.add(rig);
 

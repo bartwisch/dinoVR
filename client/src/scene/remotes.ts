@@ -26,7 +26,11 @@ let cowboyAnimations: THREE.AnimationClip[] = [];
 // Load the cowboy model once
 async function loadCowboyModel(): Promise<{ model: THREE.Group; animations: THREE.AnimationClip[] }> {
   if (cowboyModel) {
-    return { model: cowboyModel.clone(), animations: cowboyAnimations };
+    // Return a proper deep clone of the model
+    return { 
+      model: cowboyModel.clone(true), // true = recursive clone
+      animations: cowboyAnimations 
+    };
   }
   
   try {
@@ -35,10 +39,15 @@ async function loadCowboyModel(): Promise<{ model: THREE.Group; animations: THRE
     cowboyModel = gltf.scene;
     cowboyAnimations = gltf.animations || [];
     
+    console.log('Cowboy model loaded with animations:', cowboyAnimations.map(clip => clip.name));
+    
     // Scale and position the model appropriately
     cowboyModel.scale.setScalar(0.01); // Adjust scale as needed
     
-    return { model: cowboyModel.clone(), animations: cowboyAnimations };
+    return { 
+      model: cowboyModel.clone(true), // true = recursive clone
+      animations: cowboyAnimations 
+    };
   } catch (error) {
     console.error('Failed to load cowboy model:', error);
     // Fallback to cube if model fails to load
@@ -82,17 +91,23 @@ class Remote {
     // Add the loaded model
     this.mesh.add(model);
     
-    // Apply color tint to the model materials
+    // Apply color tint to the model materials (clone materials to avoid shared references)
     model.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
         if (Array.isArray(child.material)) {
-          child.material.forEach(mat => {
-            if (mat instanceof THREE.MeshStandardMaterial) {
-              mat.color.multiplyScalar(0.7).add(new THREE.Color(color).multiplyScalar(0.3));
+          child.material = child.material.map(mat => {
+            const clonedMat = mat.clone();
+            if (clonedMat instanceof THREE.MeshStandardMaterial) {
+              clonedMat.color.multiplyScalar(0.7).add(new THREE.Color(color).multiplyScalar(0.3));
             }
+            return clonedMat;
           });
-        } else if (child.material instanceof THREE.MeshStandardMaterial) {
-          child.material.color.multiplyScalar(0.7).add(new THREE.Color(color).multiplyScalar(0.3));
+        } else {
+          const clonedMat = child.material.clone();
+          if (clonedMat instanceof THREE.MeshStandardMaterial) {
+            clonedMat.color.multiplyScalar(0.7).add(new THREE.Color(color).multiplyScalar(0.3));
+          }
+          child.material = clonedMat;
         }
       }
     });
@@ -101,23 +116,33 @@ class Remote {
     if (animations.length > 0) {
       this.mixer = new THREE.AnimationMixer(model);
       
+      // Debug: log available animations
+      console.log(`Player ${this.id} animations:`, animations.map(clip => clip.name));
+      
       // Find walk animation (look for common names)
       const walkClip = animations.find(clip => 
         clip.name.toLowerCase().includes('walk') || 
         clip.name.toLowerCase().includes('run') ||
-        clip.name.toLowerCase().includes('move')
+        clip.name.toLowerCase().includes('move') ||
+        clip.name.toLowerCase().includes('idle')
       ) || animations[0]; // fallback to first animation
       
       if (walkClip) {
+        console.log(`Player ${this.id} using animation:`, walkClip.name);
         this.walkAction = this.mixer.clipAction(walkClip);
         this.walkAction.setLoop(THREE.LoopRepeat, Infinity);
+        // Start with a default pose or idle animation
+        this.walkAction.play();
       }
     }
   }
 
   update(deltaTime: number) {
     if (this.mixer) {
-      // Check if player is moving
+      // Update mixer regardless of movement
+      this.mixer.update(deltaTime);
+      
+      // Check if player is moving (simple movement detection)
       const currentPosition = this.mesh.position;
       const movement = currentPosition.distanceTo(this.lastPosition);
       const isMoving = movement > 0.01; // Threshold for movement detection
@@ -127,15 +152,18 @@ class Remote {
         
         if (this.walkAction) {
           if (isMoving) {
-            this.walkAction.play();
+            // Speed up animation when moving
+            this.walkAction.setEffectiveTimeScale(1.0);
+            console.log(`Player ${this.id} started walking`);
           } else {
-            this.walkAction.stop();
+            // Slow down animation when idle
+            this.walkAction.setEffectiveTimeScale(0.5);
+            console.log(`Player ${this.id} stopped walking`);
           }
         }
       }
       
       this.lastPosition.copy(currentPosition);
-      this.mixer.update(deltaTime);
     }
   }
 }
@@ -148,7 +176,8 @@ export class RemotesManager {
   }
 
   applySnapshot(snap: ServerSnapshot, excludeId?: string) {
-    const ids = new Set(snap.players.filter(p => p.id !== excludeId).map((p) => p.id));
+    // Include all players including the local player for third-person view
+    const ids = new Set(snap.players.map((p) => p.id));
 
     // Remove stale
     for (const [id, r] of this.remotes) {
@@ -158,9 +187,8 @@ export class RemotesManager {
       }
     }
 
-    // Upsert
+    // Upsert all players (including local player)
     for (const p of snap.players) {
-      if (p.id === excludeId) continue;
       if (!this.remotes.has(p.id)) {
         const r = new Remote(p.id, p.color);
         this.remotes.set(p.id, r);
@@ -169,6 +197,12 @@ export class RemotesManager {
         r.nameSprite = makeNameSprite(p.name);
         r.nameSprite.position.set(0, 0.4 + 0.12, 0);
         r.mesh.add(r.nameSprite);
+        
+        // Mark local player for special treatment
+        if (p.id === excludeId) {
+          console.log(`Local player ${p.name} (${p.id}) added to scene for third-person view`);
+          // Optionally add a special marker or different behavior for local player
+        }
       }
       const r = this.remotes.get(p.id)!;
       const v = new THREE.Vector3(p.position[0], p.position[1], p.position[2]);
