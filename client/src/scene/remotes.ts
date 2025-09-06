@@ -338,7 +338,12 @@ export class RemotesManager {
       if (a.quat || b.quat) {
         const qa = a.quat ?? b.quat ?? new THREE.Quaternion();
         const qb = b.quat ?? a.quat ?? new THREE.Quaternion();
-        r.mesh.quaternion.copy(qa).slerp(qb, t);
+        const interpolatedQuat = new THREE.Quaternion().copy(qa).slerp(qb, t);
+        
+        // Apply coordinate system correction for VR -> Three.js
+        // Rotate 180° around Y axis to flip front/back and left/right
+        const correctionQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+        r.mesh.quaternion.copy(correctionQuat).multiply(interpolatedQuat);
       }
       
       // Update animations
