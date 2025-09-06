@@ -85,6 +85,13 @@ class Remote {
     const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
     this.mesh.add(cube);
     
+    // Add face indicator - small cube on the front face
+    const faceGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+    const faceMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff }); // White face indicator
+    const faceIndicator = new THREE.Mesh(faceGeometry, faceMaterial);
+    faceIndicator.position.set(0, 0.1, 0.2); // Position on front face, slightly up
+    this.mesh.add(faceIndicator);
+    
     // Create controller representations
     this.createControllers();
     
@@ -124,40 +131,51 @@ class Remote {
       return;
     }
 
-    // Update left controller
-    if (controllers.left && this.leftController) {
-      this.leftController.visible = true;
-      this.leftController.position.set(
-        controllers.left.position[0],
-        controllers.left.position[1],
-        controllers.left.position[2]
-      );
-      this.leftController.quaternion.set(
-        controllers.left.quaternion[0],
-        controllers.left.quaternion[1],
-        controllers.left.quaternion[2],
-        controllers.left.quaternion[3]
-      );
-    } else if (this.leftController) {
-      this.leftController.visible = false;
+    // Show both controllers if any controller data exists
+    const hasControllerData = (controllers.left || controllers.right);
+    
+    // Update left controller (swap: use right controller data for left visual, or fallback)
+    if (this.leftController) {
+      if (hasControllerData) {
+        this.leftController.visible = true;
+        const sourceData = controllers.right || controllers.left; // Use right data, or fallback to left
+        const distance = 0.4; // Fixed distance from center
+        this.leftController.position.set(
+          -distance, // Left side at fixed distance
+          sourceData!.position[1] - 1.4, // Lower by 1.4 meters
+          sourceData!.position[2]  // Keep relative Z position
+        );
+        this.leftController.quaternion.set(
+          sourceData!.quaternion[0],
+          sourceData!.quaternion[1],
+          sourceData!.quaternion[2],
+          sourceData!.quaternion[3]
+        );
+      } else {
+        this.leftController.visible = false;
+      }
     }
 
-    // Update right controller
-    if (controllers.right && this.rightController) {
-      this.rightController.visible = true;
-      this.rightController.position.set(
-        controllers.right.position[0],
-        controllers.right.position[1],
-        controllers.right.position[2]
-      );
-      this.rightController.quaternion.set(
-        controllers.right.quaternion[0],
-        controllers.right.quaternion[1],
-        controllers.right.quaternion[2],
-        controllers.right.quaternion[3]
-      );
-    } else if (this.rightController) {
-      this.rightController.visible = false;
+    // Update right controller (swap: use left controller data for right visual, or fallback)
+    if (this.rightController) {
+      if (hasControllerData) {
+        this.rightController.visible = true;
+        const sourceData = controllers.left || controllers.right; // Use left data, or fallback to right
+        const distance = 0.4; // Fixed distance from center
+        this.rightController.position.set(
+          distance, // Right side at fixed distance
+          sourceData!.position[1] - 1.4, // Lower by 1.4 meters
+          sourceData!.position[2]  // Keep relative Z position
+        );
+        this.rightController.quaternion.set(
+          sourceData!.quaternion[0],
+          sourceData!.quaternion[1],
+          sourceData!.quaternion[2],
+          sourceData!.quaternion[3]
+        );
+      } else {
+        this.rightController.visible = false;
+      }
     }
   }
 

@@ -22,11 +22,11 @@ document.body.appendChild(VRButton.createButton(renderer));
 
 // Rig: move the rig to locomote; camera is a child
 const rig = new THREE.Group();
-rig.position.set(0, 1.6, 3);
+rig.position.set(0, 1.6, 0); // Center the rig at player position
 
 // Position camera for third-person view (behind and above the player)
-camera.position.set(0, 1.5, 3); // Slightly behind and up
-camera.lookAt(0, 1.2, 0); // Look at player height
+camera.position.set(0, 0.4, -3); // Behind and slightly above relative to rig
+camera.lookAt(0, -0.4, 0); // Look forward at player height
 
 rig.add(camera);
 scene.add(rig);
@@ -49,6 +49,43 @@ let currentControllers: {
 const input = new XRInput();
 const locomotion = new Locomotion(rig);
 const remotes = new RemotesManager(scene);
+
+// Local player representation (for third-person view)
+let localPlayer: THREE.Group | null = null;
+let localLeftController: THREE.Mesh | null = null;
+let localRightController: THREE.Mesh | null = null;
+
+function createLocalPlayer() {
+  localPlayer = new THREE.Group();
+  
+  // Local player cube (green to distinguish from remotes)
+  const cubeGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+  const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+  const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+  localPlayer.add(cube);
+  
+  // Add face indicator for local player - bright yellow to distinguish from white
+  const faceGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+  const faceMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 }); // Yellow face indicator
+  const faceIndicator = new THREE.Mesh(faceGeometry, faceMaterial);
+  faceIndicator.position.set(0, 0.1, 0.2); // Position on front face, slightly up
+  localPlayer.add(faceIndicator);
+  
+  // Local controllers
+  const leftGeometry = new THREE.BoxGeometry(0.05, 0.15, 0.05);
+  const leftMaterial = new THREE.MeshStandardMaterial({ color: 0x0088ff });
+  localLeftController = new THREE.Mesh(leftGeometry, leftMaterial);
+  localPlayer.add(localLeftController);
+  
+  const rightGeometry = new THREE.BoxGeometry(0.05, 0.15, 0.05);
+  const rightMaterial = new THREE.MeshStandardMaterial({ color: 0xff0088 });
+  localRightController = new THREE.Mesh(rightGeometry, rightMaterial);
+  localPlayer.add(localRightController);
+  
+  scene.add(localPlayer);
+}
+
+createLocalPlayer();
 
 // Networking (dev)
 const wsEl = document.getElementById('ws')!;
@@ -122,10 +159,10 @@ renderer.setAnimationLoop((timestamp, frame) => {
       }
     }
   } else {
-    // Desktop fallback - keep mock controller data
+    // Desktop fallback - keep mock controller data (symmetrical positions)
     currentControllers = {
-      left: { position: [-0.3, -0.2, -0.3], quaternion: [0, 0, 0, 1] },
-      right: { position: [0.3, -0.2, -0.3], quaternion: [0, 0, 0, 1] }
+      left: { position: [-0.4, -1.0, -0.2], quaternion: [0, 0, 0, 1] },
+      right: { position: [0.4, -1.0, -0.2], quaternion: [0, 0, 0, 1] }
     };
   }
 
@@ -136,6 +173,56 @@ renderer.setAnimationLoop((timestamp, frame) => {
   }
   const thrustVec = new THREE.Vector3().fromArray(s.thrust);
   locomotion.step(thrustVec, s.fast, dt);
+
+  // Update local player position and controllers
+  if (localPlayer) {
+    // Position local player at rig position
+    localPlayer.position.copy(rig.position);
+    localPlayer.rotation.copy(rig.rotation);
+    
+    // Update local controllers
+    if (currentControllers && localLeftController && localRightController) {
+      // Left controller
+      if (currentControllers.left) {
+        localLeftController.visible = true;
+        localLeftController.position.set(
+          currentControllers.left.position[0],
+          currentControllers.left.position[1] - 1.4, // Lower by 1.4 meters
+          currentControllers.left.position[2]
+        );
+        localLeftController.quaternion.set(
+          currentControllers.left.quaternion[0],
+          currentControllers.left.quaternion[1],
+          currentControllers.left.quaternion[2],
+          currentControllers.left.quaternion[3]
+        );
+      } else {
+        localLeftController.visible = false;
+      }
+      
+      // Right controller
+      if (currentControllers.right) {
+        localRightController.visible = true;
+        localRightController.position.set(
+          currentControllers.right.position[0],
+          currentControllers.right.position[1] - 1.4, // Lower by 1.4 meters
+          currentControllers.right.position[2]
+        );
+        localRightController.quaternion.set(
+          currentControllers.right.quaternion[0],
+          currentControllers.right.quaternion[1],
+          currentControllers.right.quaternion[2],
+          currentControllers.right.quaternion[3]
+        );
+      } else {
+        localRightController.visible = false;
+      }
+    } else {
+      // Hide controllers if no data
+      if (localLeftController) localLeftController.visible = false;
+      if (localRightController) localRightController.visible = false;
+    }
+  }
 
   // Interpolate remotes with ~120ms delay; server timestamps use Date.now()
   remotes.update(time.now() - 120, dt);
