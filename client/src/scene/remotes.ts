@@ -353,10 +353,15 @@ export class RemotesManager {
         const interpolatedQuat = new THREE.Quaternion().copy(qa).slerp(qb, t);
         
         // Apply coordinate system correction for VR -> Three.js
-        // Only rotate 180° around Y axis to flip front/back and left/right
-        // Don't rotate around X axis to avoid flipping the head upside down
-        const correctionQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
-        r.mesh.quaternion.copy(correctionQuat).multiply(interpolatedQuat);
+        // 1. Rotate 180° around Y axis to flip front/back and left/right
+        const yCorrection = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+        
+        // 2. Extract and invert pitch (X rotation) only
+        const euler = new THREE.Euler().setFromQuaternion(interpolatedQuat, 'YXZ');
+        euler.x = -euler.x; // Invert pitch only
+        const pitchCorrectedQuat = new THREE.Quaternion().setFromEuler(euler);
+        
+        r.mesh.quaternion.copy(yCorrection).multiply(pitchCorrectedQuat);
       }
       
       // Update animations

@@ -48,9 +48,9 @@ export class XRInput {
         const axY = axes[axIndex + 1] || 0;
 
         if (handed === 'left' || handed === 'none') {
-          // Movement from left stick (invert both X and Y for correct mapping)
-          lx = Math.abs(axX) > this.deadzone ? -axX : 0; // Invert X (left/right)
-          ly = Math.abs(axY) > this.deadzone ? axY : 0;  // Don't invert Y (forward/back)
+          // Movement from left stick (standard mapping, corrections applied later in thrust calculation)
+          lx = Math.abs(axX) > this.deadzone ? axX : 0;  // Normal X (left/right)
+          ly = Math.abs(axY) > this.deadzone ? -axY : 0; // Invert Y (forward/back)
         } else if (handed === 'right') {
           // Snap turn from right stick X with gating
           const rx = Math.abs(axX) > this.deadzone ? axX : 0;
@@ -86,9 +86,9 @@ export class XRInput {
     right.set(1, 0, 0).applyQuaternion(headYaw);
 
     const thrust: Thrust = [
-      right.x * lx + fwd.x * ly,
-      right.y * lx + fwd.y * ly,
-      right.z * lx + fwd.z * ly,
+      -(right.x * lx + fwd.x * ly), // Invert X movement
+      right.y * lx + fwd.y * ly,    // Keep Y movement
+      -(right.z * lx + fwd.z * ly), // Invert Z movement
     ];
 
     const q = new THREE.Quaternion();
