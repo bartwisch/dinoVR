@@ -8,9 +8,8 @@
 
   # Proxy Socket.IO to the Node server on 5174
   @socket path /socket.io* /socket.io/*
-  reverse_proxy @socket http://localhost:5174
+  reverse_proxy @socket http://127.0.0.1:5174
 
   # Everything else → Vite dev server on 5173
-  reverse_proxy http://localhost:5173
+  reverse_proxy http://127.0.0.1:5173
 }
-

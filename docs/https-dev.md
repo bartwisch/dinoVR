@@ -36,9 +36,9 @@ If you want the fastest path without certificates:
 ## Option C — Caddy on :443 (single origin)
 If you prefer a single clean URL on `https://<PC-IP>` with TLS terminated by a proxy, use the provided Caddy setup.
 
-1) Install Caddy and start your dev servers:
+1) Install Caddy and start your dev servers (client over HTTP):
 - `npm --workspace server run dev`
-- `npm --workspace client run dev`
+- `npm --workspace client run dev` (NOT `dev:https`)
 
 2) Configure the client for same-origin sockets:
 - `client/.env.local` → `VITE_WS_URL=origin`

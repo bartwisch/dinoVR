@@ -22,10 +22,12 @@ export default defineConfig(async () => {
     console.warn('[vite] vite-plugin-mkcert not installed; using default HTTPS cert.');
   }
 
+  const useHttps = process.env.DEV_HTTPS !== 'false';
+
   return {
     plugins,
     server: {
-      https: true,
+      https: useHttps,
       host: true, // listen on LAN so headsets can reach it
       proxy: {
         // Forward Socket.IO to the Node server on 5174

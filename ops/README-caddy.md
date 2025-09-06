@@ -10,7 +10,7 @@ It pairs well with `VITE_WS_URL=origin` so the client connects to the same origi
 - Install Caddy v2 (`brew install caddy` on macOS).
 - Start your dev servers:
   - `npm --workspace server run dev`
-  - `npm --workspace client run dev` (or `dev:https`; either is fine when using Caddy)
+  - `npm --workspace client run dev` (HTTP dev; do NOT use `dev:https` with this Caddyfile)
 - In `client/.env.local` set:
   - `VITE_WS_URL=origin`
 
