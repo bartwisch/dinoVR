@@ -7,28 +7,9 @@ import { io, Socket } from 'socket.io-client';
 //   (works with Vite's proxy for HTTPS dev over LAN).
 // - Otherwise, fall back to http://<host>:5174 (classic dev setup).
 export function connectSocket(): Socket {
-  const envUrl = (import.meta as any)?.env?.VITE_WS_URL as string | undefined;
-
-  let url: string | undefined;
-  if (envUrl) {
-    const normalized = envUrl.trim();
-    if (normalized === '' || normalized === '/' || normalized === 'origin') {
-      url = undefined; // let socket.io use the current origin
-    } else {
-      url = normalized; // explicit override
-    }
-  } else {
-    const u = new URL(window.location.href);
-    if (u.protocol === 'file:') {
-      url = 'http://localhost:5174';
-    } else {
-      // Default to the Node server port for non-proxied dev
-      u.port = '5174';
-      url = u.origin;
-    }
-  }
-
-  const opts = { transports: ['websocket'], autoConnect: true } as const;
-  const socket = url ? io(url, opts) : io(opts);
+  // Force using the current origin (via Vite proxy) instead of direct connection
+  // This ensures HTTPS->HTTPS and proper proxy routing
+  const opts = { transports: ['websocket'], autoConnect: true };
+  const socket = io(opts); // Always use current origin (no URL parameter)
   return socket;
 }
