@@ -5,8 +5,12 @@ const PORT = Number(process.env.PORT || 5174);
 
 type Vec3 = [number, number, number];
 type Quat = [number, number, number, number];
-type InputState = { t: number; thrust: Vec3; fast?: boolean; turn?: number; quat?: Quat };
-type Player = { id: string; pos: Vec3; vel: Vec3; quat: Quat; color: number; name: string; input: InputState };
+type Controllers = {
+  left?: { position: Vec3; quaternion: Quat };
+  right?: { position: Vec3; quaternion: Quat };
+};
+type InputState = { t: number; thrust: Vec3; fast?: boolean; turn?: number; quat?: Quat; controllers?: Controllers };
+type Player = { id: string; pos: Vec3; vel: Vec3; quat: Quat; color: number; name: string; input: InputState; controllers?: Controllers };
 
 const players = new Map<string, Player>();
 
@@ -46,6 +50,7 @@ io.on('connection', (socket) => {
     if (!p) return;
     p.input = msg;
     if (msg.quat) p.quat = msg.quat;
+    if (msg.controllers) p.controllers = msg.controllers;
   });
 
   // Simple time sync: echo back server time
@@ -92,7 +97,17 @@ setInterval(() => {
 }, 50);
 
 function snapshot() {
-  return { t: Date.now(), players: Array.from(players.values()).map(p => ({ id: p.id, position: p.pos, quaternion: p.quat, color: p.color, name: p.name })) };
+  return { 
+    t: Date.now(), 
+    players: Array.from(players.values()).map(p => ({ 
+      id: p.id, 
+      position: p.pos, 
+      quaternion: p.quat, 
+      color: p.color, 
+      name: p.name,
+      controllers: p.controllers 
+    })) 
+  };
 }
 
 httpServer.listen(PORT, () => {

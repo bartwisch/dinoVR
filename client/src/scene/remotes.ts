@@ -9,6 +9,10 @@ export interface RemotePlayerState {
   quaternion?: [number, number, number, number];
   color: number;
   name: string;
+  controllers?: {
+    left?: { position: Vec3; quaternion: [number, number, number, number] };
+    right?: { position: Vec3; quaternion: [number, number, number, number] };
+  };
 }
 
 export interface ServerSnapshot {
@@ -66,6 +70,10 @@ class Remote {
   walkAction?: THREE.AnimationAction;
   lastPosition = new THREE.Vector3();
   isMoving = false;
+  
+  // Controller visual representations
+  leftController?: THREE.Mesh;
+  rightController?: THREE.Mesh;
 
   constructor(public id: string, color: number) {
     this.color = color;
@@ -77,10 +85,80 @@ class Remote {
     const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
     this.mesh.add(cube);
     
+    // Create controller representations
+    this.createControllers();
+    
     console.log(`Player ${this.id} created as cube with color ${color.toString(16)}`);
     
     // Skip loading the cowboy model for debugging
     // this.loadModel(color);
+  }
+
+  private createControllers() {
+    // Left controller (slightly different color - more blue)
+    const leftGeometry = new THREE.BoxGeometry(0.05, 0.15, 0.05);
+    const leftMaterial = new THREE.MeshStandardMaterial({ 
+      color: new THREE.Color(this.color).multiplyScalar(0.8).add(new THREE.Color(0x0000ff).multiplyScalar(0.2))
+    });
+    this.leftController = new THREE.Mesh(leftGeometry, leftMaterial);
+    this.mesh.add(this.leftController);
+    
+    // Right controller (slightly different color - more red)
+    const rightGeometry = new THREE.BoxGeometry(0.05, 0.15, 0.05);
+    const rightMaterial = new THREE.MeshStandardMaterial({ 
+      color: new THREE.Color(this.color).multiplyScalar(0.8).add(new THREE.Color(0xff0000).multiplyScalar(0.2))
+    });
+    this.rightController = new THREE.Mesh(rightGeometry, rightMaterial);
+    this.mesh.add(this.rightController);
+    
+    // Initially hide controllers
+    this.leftController.visible = false;
+    this.rightController.visible = false;
+  }
+
+  updateControllers(controllers?: RemotePlayerState['controllers']) {
+    if (!controllers) {
+      // Hide controllers if no data
+      if (this.leftController) this.leftController.visible = false;
+      if (this.rightController) this.rightController.visible = false;
+      return;
+    }
+
+    // Update left controller
+    if (controllers.left && this.leftController) {
+      this.leftController.visible = true;
+      this.leftController.position.set(
+        controllers.left.position[0],
+        controllers.left.position[1],
+        controllers.left.position[2]
+      );
+      this.leftController.quaternion.set(
+        controllers.left.quaternion[0],
+        controllers.left.quaternion[1],
+        controllers.left.quaternion[2],
+        controllers.left.quaternion[3]
+      );
+    } else if (this.leftController) {
+      this.leftController.visible = false;
+    }
+
+    // Update right controller
+    if (controllers.right && this.rightController) {
+      this.rightController.visible = true;
+      this.rightController.position.set(
+        controllers.right.position[0],
+        controllers.right.position[1],
+        controllers.right.position[2]
+      );
+      this.rightController.quaternion.set(
+        controllers.right.quaternion[0],
+        controllers.right.quaternion[1],
+        controllers.right.quaternion[2],
+        controllers.right.quaternion[3]
+      );
+    } else if (this.rightController) {
+      this.rightController.visible = false;
+    }
   }
 
   private async loadModel(color: number) {
@@ -216,6 +294,9 @@ export class RemotesManager {
       const q = p.quaternion ? new THREE.Quaternion(p.quaternion[0], p.quaternion[1], p.quaternion[2], p.quaternion[3]) : undefined;
       r.samples.push({ t: snap.t, position: v, quat: q });
       if (r.samples.length > 10) r.samples.shift();
+      
+      // Update controllers
+      r.updateControllers(p.controllers);
     }
   }
 

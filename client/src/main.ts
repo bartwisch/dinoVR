@@ -61,7 +61,14 @@ await initXR(renderer);
 setInterval(() => {
   const session = renderer.xr.getSession?.();
   const state = input.sample(camera, session || undefined);
-  socket.emit('state_input', { t: Date.now(), thrust: state.thrust, fast: state.fast, turn: state.turn, quat: state.quat });
+  socket.emit('state_input', { 
+    t: Date.now(), 
+    thrust: state.thrust, 
+    fast: state.fast, 
+    turn: state.turn, 
+    quat: state.quat,
+    controllers: state.controllers
+  });
 }, 33);
 
 // Animation loop

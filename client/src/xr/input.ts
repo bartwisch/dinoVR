@@ -7,6 +7,10 @@ export interface InputState {
   fast: boolean;
   turn: number; // snap turn steps (degrees positive right)
   quat: [number, number, number, number]; // head orientation
+  controllers?: {
+    left?: { position: [number, number, number]; quaternion: [number, number, number, number] };
+    right?: { position: [number, number, number]; quaternion: [number, number, number, number] };
+  };
 }
 
 const tmpEuler = new THREE.Euler();
@@ -34,6 +38,7 @@ export class XRInput {
     let lx = 0, ly = 0; // left stick X (strafe), Y (forward)
     let fast = false;
     let turn = 0;
+    const controllers: InputState['controllers'] = {};
 
     if (session) {
       for (const src of session.inputSources) {
@@ -41,6 +46,21 @@ export class XRInput {
         if (!gp) continue;
         const handed = src.handedness as ('left' | 'right' | 'none' | undefined);
         const axes = gp.axes || [];
+        
+        // For now, we'll use relative positions to the head for controllers
+        // This is a simplified approach for debugging
+        if (handed === 'left') {
+          controllers.left = {
+            position: [-0.3, -0.2, -0.3], // Relative to head
+            quaternion: [0, 0, 0, 1]
+          };
+        } else if (handed === 'right') {
+          controllers.right = {
+            position: [0.3, -0.2, -0.3], // Relative to head
+            quaternion: [0, 0, 0, 1]
+          };
+        }
+        
         // xr-standard: prefer thumbstick axes [2,3] when present, else [0,1]
         const axIndex = axes.length >= 4 ? 2 : 0;
         const axX = axes[axIndex] || 0;
@@ -74,6 +94,16 @@ export class XRInput {
       ly = (this.key.has('w') ? 1 : 0) + (this.key.has('s') ? -1 : 0);
       fast = this.key.has('shift');
       if (this.key.has('e')) turn = 30; else if (this.key.has('q')) turn = -30;
+      
+      // Mock controller data for desktop debugging
+      controllers.left = {
+        position: [-0.3, -0.2, -0.3],
+        quaternion: [0, 0, 0, 1]
+      };
+      controllers.right = {
+        position: [0.3, -0.2, -0.3],
+        quaternion: [0, 0, 0, 1]
+      };
     }
 
     // Map to head-yaw local thrust
@@ -93,6 +123,7 @@ export class XRInput {
     const q = new THREE.Quaternion();
     (camera as THREE.Object3D).getWorldQuaternion(q);
     const quat: [number, number, number, number] = [q.x, q.y, q.z, q.w];
-    return { thrust, fast, turn, quat };
+    
+    return { thrust, fast, turn, quat, controllers: Object.keys(controllers).length > 0 ? controllers : undefined };
   }
 }
