@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:https": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts"
@@ -20,7 +21,7 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "typescript": "^5.4.0",
-    "vite": "^5.0.0"
+    "vite": "^5.0.0",
+    "vite-plugin-mkcert": "^1.17.5"
   }
 }
-

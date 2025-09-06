@@ -1,0 +1,16 @@
+# Set SITE via environment, e.g. SITE=192.168.1.50
+# Then run: SITE=192.168.1.50 caddy run --config ops/Caddyfile
+
+{$SITE}:443 {
+  tls internal
+
+  encode zstd gzip
+
+  # Proxy Socket.IO to the Node server on 5174
+  @socket path /socket.io* /socket.io/*
+  reverse_proxy @socket http://localhost:5174
+
+  # Everything else → Vite dev server on 5173
+  reverse_proxy http://localhost:5173
+}
+

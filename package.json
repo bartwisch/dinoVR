@@ -11,6 +11,7 @@
     "dev": "npm run dev:server & npm run dev:client",
     "dev:client": "npm --workspace client run dev",
     "dev:server": "npm --workspace server run dev",
+    "proxy:caddy": "SITE=${SITE:-localhost} caddy run --config ops/Caddyfile",
     "build": "npm -ws run build",
     "lint": "npm -ws run lint --if-present",
     "test": "npm -ws run test --if-present"
