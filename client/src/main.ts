@@ -39,6 +39,12 @@ dir.position.set(1, 2, 1); scene.add(dir);
 // Reference grid
 const grid = new THREE.GridHelper(20, 20, 0x224466, 0x223344); grid.position.y = 0; scene.add(grid);
 
+// Global controller state for sharing between render loop and input sampling
+let currentControllers: {
+  left?: { position: [number, number, number]; quaternion: [number, number, number, number] };
+  right?: { position: [number, number, number]; quaternion: [number, number, number, number] };
+} | undefined;
+
 // Managers
 const input = new XRInput();
 const locomotion = new Locomotion(rig);
@@ -67,16 +73,61 @@ setInterval(() => {
     fast: state.fast, 
     turn: state.turn, 
     quat: state.quat,
-    controllers: state.controllers
+    controllers: currentControllers // Use controllers from render loop
   });
 }, 33);
 
 // Animation loop
 const last = { t: performance.now() };
-renderer.setAnimationLoop(() => {
+renderer.setAnimationLoop((timestamp, frame) => {
   const nowPerf = performance.now();
   const dt = Math.min(0.05, (nowPerf - last.t) / 1000);
   last.t = nowPerf;
+
+  // Update controller positions from XR frame
+  const session = renderer.xr.getSession();
+  if (session && frame) {
+    const referenceSpace = renderer.xr.getReferenceSpace();
+    if (referenceSpace) {
+      const controllers: typeof currentControllers = {};
+      
+      for (const inputSource of session.inputSources) {
+        if (inputSource.gripSpace) {
+          const pose = frame.getPose(inputSource.gripSpace, referenceSpace);
+          if (pose) {
+            const pos = pose.transform.position;
+            const ori = pose.transform.orientation;
+            const controllerData = {
+              position: [pos.x, pos.y, pos.z] as [number, number, number],
+              quaternion: [ori.x, ori.y, ori.z, ori.w] as [number, number, number, number]
+            };
+            
+            if (inputSource.handedness === 'left') {
+              controllers.left = controllerData;
+            } else if (inputSource.handedness === 'right') {
+              controllers.right = controllerData;
+            }
+          }
+        }
+      }
+      
+      currentControllers = Object.keys(controllers).length > 0 ? controllers : undefined;
+      
+      // Debug logging
+      if (currentControllers) {
+        console.log('Controllers detected:', {
+          left: currentControllers.left ? 'YES' : 'NO',
+          right: currentControllers.right ? 'YES' : 'NO'
+        });
+      }
+    }
+  } else {
+    // Desktop fallback - keep mock controller data
+    currentControllers = {
+      left: { position: [-0.3, -0.2, -0.3], quaternion: [0, 0, 0, 1] },
+      right: { position: [0.3, -0.2, -0.3], quaternion: [0, 0, 0, 1] }
+    };
+  }
 
   // Local prediction
   const s = input.sample(camera, renderer.xr.getSession?.() || undefined);
