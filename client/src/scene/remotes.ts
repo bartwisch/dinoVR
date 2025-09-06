@@ -71,18 +71,21 @@ class Remote {
     this.color = color;
     this.mesh = new THREE.Group();
     
-    // Initialize with a placeholder until model loads
-    const placeholder = new THREE.Mesh(
-      new THREE.BoxGeometry(0.4, 0.4, 0.4), 
-      new THREE.MeshStandardMaterial({ color })
-    );
-    this.mesh.add(placeholder);
+    // Use simple cube for debugging instead of GLB model
+    const cubeGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+    const cubeMaterial = new THREE.MeshStandardMaterial({ color });
+    const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    this.mesh.add(cube);
     
-    // Load the cowboy model asynchronously
-    this.loadModel(color);
+    console.log(`Player ${this.id} created as cube with color ${color.toString(16)}`);
+    
+    // Skip loading the cowboy model for debugging
+    // this.loadModel(color);
   }
 
   private async loadModel(color: number) {
+    // Disabled for debugging - using cubes instead
+    /* 
     const { model, animations } = await loadCowboyModel();
     
     // Remove placeholder
@@ -135,9 +138,12 @@ class Remote {
         this.walkAction.play();
       }
     }
+    */
   }
 
   update(deltaTime: number) {
+    // Simplified update for cube debugging - no animations
+    /*
     if (this.mixer) {
       // Update mixer regardless of movement
       this.mixer.update(deltaTime);
@@ -165,6 +171,7 @@ class Remote {
       
       this.lastPosition.copy(currentPosition);
     }
+    */
   }
 }
 
