@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 type Vec3 = [number, number, number];
 
@@ -17,15 +18,125 @@ export interface ServerSnapshot {
 
 type Sample = { t: number; position: THREE.Vector3; quat?: THREE.Quaternion };
 
+// Global loader and model cache
+const gltfLoader = new GLTFLoader();
+let cowboyModel: THREE.Group | null = null;
+let cowboyAnimations: THREE.AnimationClip[] = [];
+
+// Load the cowboy model once
+async function loadCowboyModel(): Promise<{ model: THREE.Group; animations: THREE.AnimationClip[] }> {
+  if (cowboyModel) {
+    return { model: cowboyModel.clone(), animations: cowboyAnimations };
+  }
+  
+  try {
+    // Import the GLB file - Vite will handle the path resolution
+    const gltf = await gltfLoader.loadAsync(new URL('../assets/cowboy1.glb', import.meta.url).href);
+    cowboyModel = gltf.scene;
+    cowboyAnimations = gltf.animations || [];
+    
+    // Scale and position the model appropriately
+    cowboyModel.scale.setScalar(0.01); // Adjust scale as needed
+    
+    return { model: cowboyModel.clone(), animations: cowboyAnimations };
+  } catch (error) {
+    console.error('Failed to load cowboy model:', error);
+    // Fallback to cube if model fails to load
+    const fallback = new THREE.Group();
+    fallback.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0x888888 })));
+    return { model: fallback, animations: [] };
+  }
+}
+
 class Remote {
-  mesh: THREE.Mesh;
+  mesh: THREE.Group;
   samples: Sample[] = [];
   nameSprite?: THREE.Sprite;
   color: number;
+  mixer?: THREE.AnimationMixer;
+  walkAction?: THREE.AnimationAction;
+  lastPosition = new THREE.Vector3();
+  isMoving = false;
+
   constructor(public id: string, color: number) {
     this.color = color;
-    const mat = new THREE.MeshStandardMaterial({ color });
-    this.mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mat);
+    this.mesh = new THREE.Group();
+    
+    // Initialize with a placeholder until model loads
+    const placeholder = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.4, 0.4), 
+      new THREE.MeshStandardMaterial({ color })
+    );
+    this.mesh.add(placeholder);
+    
+    // Load the cowboy model asynchronously
+    this.loadModel(color);
+  }
+
+  private async loadModel(color: number) {
+    const { model, animations } = await loadCowboyModel();
+    
+    // Remove placeholder
+    this.mesh.clear();
+    
+    // Add the loaded model
+    this.mesh.add(model);
+    
+    // Apply color tint to the model materials
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => {
+            if (mat instanceof THREE.MeshStandardMaterial) {
+              mat.color.multiplyScalar(0.7).add(new THREE.Color(color).multiplyScalar(0.3));
+            }
+          });
+        } else if (child.material instanceof THREE.MeshStandardMaterial) {
+          child.material.color.multiplyScalar(0.7).add(new THREE.Color(color).multiplyScalar(0.3));
+        }
+      }
+    });
+    
+    // Set up animations
+    if (animations.length > 0) {
+      this.mixer = new THREE.AnimationMixer(model);
+      
+      // Find walk animation (look for common names)
+      const walkClip = animations.find(clip => 
+        clip.name.toLowerCase().includes('walk') || 
+        clip.name.toLowerCase().includes('run') ||
+        clip.name.toLowerCase().includes('move')
+      ) || animations[0]; // fallback to first animation
+      
+      if (walkClip) {
+        this.walkAction = this.mixer.clipAction(walkClip);
+        this.walkAction.setLoop(THREE.LoopRepeat, Infinity);
+      }
+    }
+  }
+
+  update(deltaTime: number) {
+    if (this.mixer) {
+      // Check if player is moving
+      const currentPosition = this.mesh.position;
+      const movement = currentPosition.distanceTo(this.lastPosition);
+      const isMoving = movement > 0.01; // Threshold for movement detection
+      
+      if (isMoving !== this.isMoving) {
+        this.isMoving = isMoving;
+        
+        if (this.walkAction) {
+          if (isMoving) {
+            this.walkAction.play();
+          } else {
+            this.walkAction.stop();
+          }
+        }
+      }
+      
+      this.lastPosition.copy(currentPosition);
+      this.mixer.update(deltaTime);
+    }
   }
 }
 
@@ -67,7 +178,7 @@ export class RemotesManager {
     }
   }
 
-  update(renderTime: number) {
+  update(renderTime: number, deltaTime: number = 0.016) {
     for (const r of this.remotes.values()) {
       // Find two samples around renderTime
       const s = r.samples;
@@ -89,6 +200,9 @@ export class RemotesManager {
         const qb = b.quat ?? a.quat ?? new THREE.Quaternion();
         r.mesh.quaternion.copy(qa).slerp(qb, t);
       }
+      
+      // Update animations
+      r.update(deltaTime);
     }
   }
 }

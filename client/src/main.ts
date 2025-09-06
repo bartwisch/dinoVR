@@ -75,7 +75,7 @@ renderer.setAnimationLoop(() => {
   locomotion.step(thrustVec, s.fast, dt);
 
   // Interpolate remotes with ~120ms delay; server timestamps use Date.now()
-  remotes.update(time.now() - 120);
+  remotes.update(time.now() - 120, dt);
 
   renderer.render(scene, camera);
 });
