@@ -68,8 +68,20 @@ function createLocalPlayer() {
   const faceGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
   const faceMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 }); // Yellow face indicator
   const faceIndicator = new THREE.Mesh(faceGeometry, faceMaterial);
-  faceIndicator.position.set(0, 0.1, 0.2); // Position on front face, slightly up
+  faceIndicator.position.set(0, -0.1, 0.2); // Position on front face, slightly down (like a mouth)
   localPlayer.add(faceIndicator);
+  
+  // Add eyes for local player - dark blue to distinguish from black
+  const eyeGeometry = new THREE.BoxGeometry(0.025, 0.025, 0.025);
+  const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x000088 }); // Dark blue eyes
+  
+  const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+  leftEye.position.set(-0.05, 0.05, 0.21); // Left eye (slightly forward than mouth)
+  localPlayer.add(leftEye);
+  
+  const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+  rightEye.position.set(0.05, 0.05, 0.21); // Right eye (slightly forward than mouth)
+  localPlayer.add(rightEye);
   
   // Local controllers
   const leftGeometry = new THREE.BoxGeometry(0.05, 0.15, 0.05);

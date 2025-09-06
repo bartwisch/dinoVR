@@ -48,9 +48,9 @@ export class XRInput {
         const axY = axes[axIndex + 1] || 0;
 
         if (handed === 'left' || handed === 'none') {
-          // Movement from left stick (invert Y so up is positive forward)
-          lx = Math.abs(axX) > this.deadzone ? axX : 0;
-          ly = Math.abs(axY) > this.deadzone ? -axY : 0;
+          // Movement from left stick (invert both X and Y for correct mapping)
+          lx = Math.abs(axX) > this.deadzone ? -axX : 0; // Invert X (left/right)
+          ly = Math.abs(axY) > this.deadzone ? axY : 0;  // Don't invert Y (forward/back)
         } else if (handed === 'right') {
           // Snap turn from right stick X with gating
           const rx = Math.abs(axX) > this.deadzone ? axX : 0;

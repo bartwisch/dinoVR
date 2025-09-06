@@ -89,8 +89,20 @@ class Remote {
     const faceGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
     const faceMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff }); // White face indicator
     const faceIndicator = new THREE.Mesh(faceGeometry, faceMaterial);
-    faceIndicator.position.set(0, 0.1, 0.2); // Position on front face, slightly up
+    faceIndicator.position.set(0, -0.1, 0.2); // Position on front face, slightly down (like a mouth)
     this.mesh.add(faceIndicator);
+    
+    // Add eyes - two small black cubes
+    const eyeGeometry = new THREE.BoxGeometry(0.025, 0.025, 0.025);
+    const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 }); // Black eyes
+    
+    const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+    leftEye.position.set(-0.05, 0.05, 0.21); // Left eye (slightly forward than mouth)
+    this.mesh.add(leftEye);
+    
+    const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+    rightEye.position.set(0.05, 0.05, 0.21); // Right eye (slightly forward than mouth)
+    this.mesh.add(rightEye);
     
     // Create controller representations
     this.createControllers();
@@ -341,7 +353,8 @@ export class RemotesManager {
         const interpolatedQuat = new THREE.Quaternion().copy(qa).slerp(qb, t);
         
         // Apply coordinate system correction for VR -> Three.js
-        // Rotate 180° around Y axis to flip front/back and left/right
+        // Only rotate 180° around Y axis to flip front/back and left/right
+        // Don't rotate around X axis to avoid flipping the head upside down
         const correctionQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
         r.mesh.quaternion.copy(correctionQuat).multiply(interpolatedQuat);
       }
