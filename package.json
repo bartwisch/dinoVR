@@ -8,6 +8,7 @@
     "shared"
   ],
   "scripts": {
+    "dev": "npm run dev:server & npm run dev:client",
     "dev:client": "npm --workspace client run dev",
     "dev:server": "npm --workspace server run dev",
     "build": "npm -ws run build",
@@ -15,4 +16,3 @@
     "test": "npm -ws run test --if-present"
   }
 }
-
