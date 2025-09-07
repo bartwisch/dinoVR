@@ -15,6 +15,26 @@ const headYaw = new THREE.Quaternion();
 const fwd = new THREE.Vector3();
 const right = new THREE.Vector3();
 
+// Choose thumbstick axes with simple, robust heuristic:
+// - Prefer indices [2,3] if available (xr-standard often maps primary stick there),
+// - Otherwise fall back to [0,1].
+// - Returns a safe pair in [-1,1].
+function pickStickAxes(axes: number[]): [number, number] {
+  const ax2 = axes.length >= 4 ? [axes[2] ?? 0, axes[3] ?? 0] as [number, number] : [0, 0];
+  const ax0 = [axes[0] ?? 0, axes[1] ?? 0] as [number, number];
+  // If both present, pick the one with larger magnitude; otherwise whichever exists.
+  if (axes.length >= 4) {
+    const m2 = Math.abs(ax2[0]) + Math.abs(ax2[1]);
+    const m0 = Math.abs(ax0[0]) + Math.abs(ax0[1]);
+    return (m2 >= m0 ? ax2 : ax0);
+  }
+  return ax0;
+}
+
+function clampUnit(n: number): number {
+  return Math.max(-1, Math.min(1, n));
+}
+
 export class XRInput {
   private key = new Set<string>();
   private snapReady = true; // gate snap turns until stick returns to deadzone
@@ -43,11 +63,9 @@ export class XRInput {
         if (!gp) continue;
         const handed = src.handedness as ('left' | 'right' | 'none' | undefined);
         const axes = gp.axes || [];
-        
-        // xr-standard: prefer thumbstick axes [2,3] when present, else [0,1]
-        const axIndex = axes.length >= 4 ? 2 : 0;
-        const axX = axes[axIndex] || 0;
-        const axY = axes[axIndex + 1] || 0;
+        const [axXRaw, axYRaw] = pickStickAxes(axes);
+        const axX = clampUnit(axXRaw);
+        const axY = clampUnit(axYRaw);
 
         // Debug: log all gamepad info for troubleshooting (less verbose)
         if (handed === 'right' && (Math.abs(axX) > 0.1 || Math.abs(axY) > 0.1)) {

@@ -25,6 +25,12 @@ const rig = new THREE.Group();
 rig.position.set(0, 1.6, 0); // Center the rig at player position
 
 // Camera orbital controls
+// Tunables for camera feel (units: rad/s for orbit/pitch, m/s for zoom)
+const ORBIT_SPEED = 2.5;           // horizontal orbit speed
+const PITCH_SPEED = 1.8;           // vertical orbit speed
+const ZOOM_SPEED = 3.0;            // zoom speed
+const MIN_PHI = THREE.MathUtils.degToRad(15);  // avoid looking too high
+const MAX_PHI = THREE.MathUtils.degToRad(85);  // avoid flipping overhead
 let cameraRadius = 3; // Distance from player
 let cameraTheta = Math.PI; // Horizontal angle (starts behind player)  
 let cameraPhi = Math.PI / 2.2; // Vertical angle (slightly above)
@@ -291,17 +297,27 @@ renderer.setAnimationLoop((timestamp, frame) => {
   const thrustVec = new THREE.Vector3().fromArray(s.thrust);
   locomotion.step(thrustVec, s.fast, dt);
   
-  // Camera zoom from right stick
+  // Camera orbit + zoom from right stick (desktop fallback: arrow keys)
   if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
-    console.log('Camera move detected:', s.cameraMove);
-    const zoomSensitivity = 3; // Zoom sensitivity
-    
-    // Use Y-axis (forward/back) of right stick for zoom
-    cameraRadius += s.cameraMove[1] * zoomSensitivity * dt;
-    
-    // Clamp camera distance (min 1.5, max 10)
-    cameraRadius = Math.max(1.5, Math.min(10, cameraRadius));
-    
+    const moveX = s.cameraMove[0];
+    const moveY = s.cameraMove[1];
+
+    // Horizontal orbit (azimuth)
+    cameraTheta += moveX * ORBIT_SPEED * dt;
+
+    // Vertical orbit (elevation/pitch). Invert Y: up on stick looks down in code by convention.
+    cameraPhi += -moveY * PITCH_SPEED * dt;
+    cameraPhi = THREE.MathUtils.clamp(cameraPhi, MIN_PHI, MAX_PHI);
+
+    // Zoom remains on Y as well (simple/minimal behavior)
+    cameraRadius += moveY * ZOOM_SPEED * dt;
+    cameraRadius = THREE.MathUtils.clamp(cameraRadius, 1.5, 10);
+
+    // Guard against NaNs
+    if (!Number.isFinite(cameraTheta)) cameraTheta = Math.PI;
+    if (!Number.isFinite(cameraPhi)) cameraPhi = THREE.MathUtils.clamp(Math.PI / 2.2, MIN_PHI, MAX_PHI);
+    if (!Number.isFinite(cameraRadius)) cameraRadius = 3;
+
     updateCameraPosition();
   }
 
