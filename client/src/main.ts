@@ -6,6 +6,9 @@ import { Locomotion } from './xr/locomotion';
 import { RemotesManager, type ServerSnapshot } from './scene/remotes';
 import { connectSocket } from './net/client';
 import { TimeSync } from './net/time';
+import { getFlag } from './util/flags';
+import { CameraController } from './player/camera';
+import { PlayerController } from './player/controller';
 
 // Scene & renderer
 const scene = new THREE.Scene();
@@ -24,8 +27,10 @@ document.body.appendChild(VRButton.createButton(renderer));
 const rig = new THREE.Group();
 rig.position.set(0, 1.6, 0); // Center the rig at player position
 
-// Camera orbital controls
-// Tunables for camera feel (units: rad/s for orbit/pitch, m/s for zoom)
+// Feature flag for new controller path
+const USE_NEW_CONTROLLER = getFlag('newController', false);
+
+// Camera orbital controls (legacy path variables)
 const ORBIT_SPEED = 2.5;           // horizontal orbit speed
 const PITCH_SPEED = 1.8;           // vertical orbit speed
 const ZOOM_SPEED = 3.0;            // zoom speed
@@ -35,17 +40,19 @@ let cameraRadius = 3; // Distance from player
 let cameraTheta = Math.PI; // Horizontal angle (starts behind player)  
 let cameraPhi = Math.PI / 2.2; // Vertical angle (slightly above)
 
-// Position camera for third-person view (behind and above the player)
-function updateCameraPosition() {
+function updateCameraPositionLegacy() {
   const x = cameraRadius * Math.sin(cameraPhi) * Math.cos(cameraTheta);
   const y = cameraRadius * Math.cos(cameraPhi);
   const z = cameraRadius * Math.sin(cameraPhi) * Math.sin(cameraTheta);
-  
   camera.position.set(x, y, z);
-  camera.lookAt(0, 0, 0); // Always look at player center
+  // Look at rig's world origin for correctness when rig moves
+  const rigWorld = new THREE.Vector3();
+  rig.getWorldPosition(rigWorld);
+  camera.lookAt(rigWorld);
 }
 
-updateCameraPosition(); // Set initial position
+// Initialize camera position
+updateCameraPositionLegacy();
 
 rig.add(camera);
 scene.add(rig);
@@ -158,8 +165,23 @@ let currentControllers: {
 
 // Managers
 const input = new XRInput();
-const locomotion = new Locomotion(rig);
+const locomotion = new Locomotion(rig); // legacy path
 const remotes = new RemotesManager(scene);
+
+// New controller modules (used when flag is on)
+let cameraCtl: CameraController | null = null;
+let playerCtl: PlayerController | null = null;
+if (USE_NEW_CONTROLLER) {
+  cameraCtl = new CameraController(
+    camera,
+    () => {
+      const v = new THREE.Vector3();
+      rig.getWorldPosition(v);
+      return v;
+    }
+  );
+  playerCtl = new PlayerController(rig);
+}
 
 // Local player representation (for third-person view)
 let localPlayer: THREE.Group | null = null;
@@ -218,6 +240,11 @@ socket.on('connect', () => (wsEl.textContent = `connected:${socket.id}`));
 socket.on('disconnect', () => (wsEl.textContent = 'disconnected'));
 socket.on('snapshot', (snap: ServerSnapshot) => {
   remotes.applySnapshot(snap, socket.id);
+  // Feed local authoritative position to PlayerController for gentle reconciliation
+  if (USE_NEW_CONTROLLER && playerCtl) {
+    const me = snap.players.find(p => p.id === socket.id);
+    if (me) playerCtl.applyAuthoritative(me.position);
+  }
 });
 
 // XR session init
@@ -294,31 +321,28 @@ renderer.setAnimationLoop((timestamp, frame) => {
   if (s.turn) {
     rig.rotateY(THREE.MathUtils.degToRad(s.turn));
   }
-  const thrustVec = new THREE.Vector3().fromArray(s.thrust);
-  locomotion.step(thrustVec, s.fast, dt);
-  
-  // Camera orbit + zoom from right stick (desktop fallback: arrow keys)
-  if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
+  if (USE_NEW_CONTROLLER && playerCtl) {
+    playerCtl.step(dt, { thrust: s.thrust, fast: s.fast });
+  } else {
+    const thrustVec = new THREE.Vector3().fromArray(s.thrust);
+    locomotion.step(thrustVec, s.fast, dt);
+  }
+
+  // Camera control
+  if (USE_NEW_CONTROLLER && cameraCtl) {
+    cameraCtl.update(dt, s.cameraMove);
+  } else if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
     const moveX = s.cameraMove[0];
     const moveY = s.cameraMove[1];
-
-    // Horizontal orbit (azimuth)
     cameraTheta += moveX * ORBIT_SPEED * dt;
-
-    // Vertical orbit (elevation/pitch). Invert Y: up on stick looks down in code by convention.
     cameraPhi += -moveY * PITCH_SPEED * dt;
     cameraPhi = THREE.MathUtils.clamp(cameraPhi, MIN_PHI, MAX_PHI);
-
-    // Zoom remains on Y as well (simple/minimal behavior)
     cameraRadius += moveY * ZOOM_SPEED * dt;
     cameraRadius = THREE.MathUtils.clamp(cameraRadius, 1.5, 10);
-
-    // Guard against NaNs
     if (!Number.isFinite(cameraTheta)) cameraTheta = Math.PI;
     if (!Number.isFinite(cameraPhi)) cameraPhi = THREE.MathUtils.clamp(Math.PI / 2.2, MIN_PHI, MAX_PHI);
     if (!Number.isFinite(cameraRadius)) cameraRadius = 3;
-
-    updateCameraPosition();
+    updateCameraPositionLegacy();
   }
 
   // Update local player position and controllers
