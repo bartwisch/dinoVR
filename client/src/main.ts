@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { initXR } from './xr/session';
 import { XRInput } from './xr/input';
 import { Locomotion } from './xr/locomotion';
@@ -30,13 +31,21 @@ rig.position.set(0, 1.6, 0); // Center the rig at player position
 // Feature flag for new controller path
 const USE_NEW_CONTROLLER = getFlag('newController', false);
 
-// Simple camera rotation variables
-let cameraYaw = 0;   // Horizontal rotation
-let cameraPitch = 0; // Vertical rotation
-
-// Position camera higher and further back from player
+// OrbitControls for reliable camera control
 camera.position.set(0, 2.5, 4); // x=0 (centered), y=2.5 (higher), z=4 (further back)
-camera.lookAt(0, 1.6, 0); // Look at player head height
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.6, 0); // Look at player head height
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.enableZoom = true;
+controls.enablePan = false; // Disable panning for now
+controls.minDistance = 2;
+controls.maxDistance = 10;
+controls.minPolarAngle = Math.PI / 6; // Limit vertical rotation
+controls.maxPolarAngle = Math.PI / 1.5;
+
+// Disable mouse/touch controls since we'll control via thumbstick
+controls.enableRotate = false;
 
 rig.add(camera);
 scene.add(rig);
@@ -338,36 +347,42 @@ renderer.setAnimationLoop((timestamp, frame) => {
     locomotion.step(thrustVec, s.fast, dt);
   }
 
-  // Simple direct camera control with LEFT thumbstick (SWAPPED)
+  // OrbitControls camera control with LEFT thumbstick (SWAPPED)
   if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
-    const sensitivity = 2.0; // Adjust for sensitivity
-    const maxPitch = Math.PI / 2 - 0.1; // Prevent looking straight up/down
+    const sensitivity = 1.5; // Adjust for sensitivity
     
     // Debug logging
-    console.log('🎥 CAMERA CONTROL (LEFT stick):', {
-      moveX: s.cameraMove[0],
-      moveY: s.cameraMove[1],
-      oldYaw: cameraYaw,
-      oldPitch: cameraPitch
+    console.log('🎥 ORBIT CAMERA CONTROL (LEFT stick):', {
+      moveX: s.cameraMove[0], // positive = stick right
+      moveY: s.cameraMove[1], // positive = stick up
     });
     
-    // Apply thumbstick input directly to camera rotation
-    cameraYaw += s.cameraMove[0] * sensitivity * dt; // Right = positive yaw
-    cameraPitch -= s.cameraMove[1] * sensitivity * dt; // Up = negative pitch (inverted)
+    // Get current spherical coordinates
+    const spherical = new THREE.Spherical();
+    spherical.setFromVector3(camera.position.clone().sub(controls.target));
     
-    // Clamp pitch to prevent camera flip
-    cameraPitch = THREE.MathUtils.clamp(cameraPitch, -maxPitch, maxPitch);
+    // Apply thumbstick input to spherical coordinates
+    spherical.theta -= s.cameraMove[0] * sensitivity * dt; // Horizontal rotation (azimuth)
+    spherical.phi += s.cameraMove[1] * sensitivity * dt;   // Vertical rotation (polar)
     
-    // Apply rotations to camera
-    camera.rotation.set(cameraPitch, cameraYaw, 0);
+    // Clamp phi to prevent camera flip
+    spherical.phi = Math.max(controls.minPolarAngle, Math.min(controls.maxPolarAngle, spherical.phi));
     
-    console.log('✅ Camera rotation applied:', {
-      newYaw: cameraYaw,
-      newPitch: cameraPitch,
-      cameraRotation: { x: camera.rotation.x, y: camera.rotation.y, z: camera.rotation.z },
+    // Update camera position from spherical coordinates
+    camera.position.setFromSpherical(spherical);
+    camera.position.add(controls.target);
+    camera.lookAt(controls.target);
+    
+    console.log('✅ Orbit camera updated:', {
+      theta: spherical.theta,
+      phi: spherical.phi,
+      radius: spherical.radius,
       cameraPosition: { x: camera.position.x, y: camera.position.y, z: camera.position.z }
     });
   }
+  
+  // Update OrbitControls (for damping)
+  controls.update();
 
   // Update local player position and controllers
   if (localPlayer) {
