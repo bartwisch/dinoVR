@@ -9,6 +9,7 @@ import { TimeSync } from './net/time';
 import { getFlag } from './util/flags';
 import { CameraController } from './player/camera';
 import { PlayerController } from './player/controller';
+import { ControllerHUD } from './xr/hud';
 
 // Scene & renderer
 const scene = new THREE.Scene();
@@ -167,6 +168,28 @@ let currentControllers: {
 const input = new XRInput();
 const locomotion = new Locomotion(rig); // legacy path
 const remotes = new RemotesManager(scene);
+const hud = new ControllerHUD(camera);
+
+// HUD toggle functionality
+let hudVisible = true;
+let hudTogglePressed = false;
+
+// Listen for 'H' key to toggle HUD visibility
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'h' && !hudTogglePressed) {
+      hudTogglePressed = true;
+      hudVisible = !hudVisible;
+      hud.setVisible(hudVisible);
+    }
+  });
+  
+  window.addEventListener('keyup', (e) => {
+    if (e.key.toLowerCase() === 'h') {
+      hudTogglePressed = false;
+    }
+  });
+}
 
 // New controller modules (used when flag is on)
 let cameraCtl: CameraController | null = null;
@@ -318,6 +341,10 @@ renderer.setAnimationLoop((timestamp, frame) => {
 
   // Local prediction
   const s = input.sample(camera, renderer.xr.getSession?.() || undefined);
+  
+  // Update HUD with current button states
+  hud.update(s.controllerButtons);
+  
   if (s.turn) {
     rig.rotateY(THREE.MathUtils.degToRad(s.turn));
   }
@@ -330,7 +357,7 @@ renderer.setAnimationLoop((timestamp, frame) => {
 
   // Camera control
   if (USE_NEW_CONTROLLER && cameraCtl) {
-    cameraCtl.update(dt, s.cameraMove);
+    cameraCtl.update(dt, s.cameraMove as [number, number], s.cameraPan);
   } else if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
     const moveX = s.cameraMove[0];
     const moveY = s.cameraMove[1];

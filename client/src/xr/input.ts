@@ -2,12 +2,30 @@ import * as THREE from 'three';
 
 export type Thrust = [number, number, number];
 
+export interface ButtonState {
+  trigger: boolean;
+  squeeze: boolean;
+  thumbstick: boolean;
+  buttonA: boolean;
+  buttonB: boolean;
+  touchpadPressed: boolean;
+  thumbstickX: number; // -1 to 1
+  thumbstickY: number; // -1 to 1
+}
+
+export interface ControllerButtonStates {
+  left?: ButtonState;
+  right?: ButtonState;
+}
+
 export interface InputState {
   thrust: Thrust; // head-yaw local thrust
   fast: boolean;
   turn: number; // snap turn steps (degrees positive right)
   quat: [number, number, number, number]; // head orientation
   cameraMove: [number, number]; // camera movement from right stick [horizontal, vertical]
+  cameraPan: boolean; // when true, interpret right stick as pan (e.g., right grip held)
+  controllerButtons: ControllerButtonStates; // button states for HUD display
 }
 
 const tmpEuler = new THREE.Euler();
@@ -54,15 +72,17 @@ export class XRInput {
   sample(camera: THREE.Camera, session?: XRSession): InputState {
     let lx = 0, ly = 0; // left stick X (strafe), Y (forward)
     let fast = false;
-    let turn = 0;
+    const turn = 0;
     let cameraMoveX = 0, cameraMoveY = 0; // right stick for camera movement
+    let cameraPan = false; // right-grip modifier to pan instead of orbit
+    const controllerButtons: ControllerButtonStates = {};
 
     if (session) {
       for (const src of session.inputSources) {
         const gp = src.gamepad as Gamepad | undefined;
         if (!gp) continue;
         const handed = src.handedness as ('left' | 'right' | 'none' | undefined);
-        const axes = gp.axes || [];
+        const axes = Array.from(gp.axes || []);
         const [axXRaw, axYRaw] = pickStickAxes(axes);
         const axX = clampUnit(axXRaw);
         const axY = clampUnit(axYRaw);
@@ -76,10 +96,29 @@ export class XRInput {
           });
         }
 
+        // Track button states for both controllers
+        const buttonState: ButtonState = {
+          trigger: gp.buttons[0]?.pressed || false,
+          squeeze: gp.buttons[1]?.pressed || false,
+          thumbstick: gp.buttons[3]?.pressed || false, // Common thumbstick press button
+          buttonA: gp.buttons[4]?.pressed || false,
+          buttonB: gp.buttons[5]?.pressed || false,
+          touchpadPressed: gp.buttons[2]?.pressed || false, // Touchpad or similar
+          thumbstickX: axX,
+          thumbstickY: axY,
+        };
+
+        // Debug: Log controller detection and button presses
+        const hasButtonPressed = Object.values(buttonState).some(pressed => pressed);
+        if (hasButtonPressed) {
+          console.log(`${handed} controller buttons:`, buttonState);
+        }
+
         if (handed === 'left' || handed === 'none') {
           // Movement from left stick (standard mapping, corrections applied later in thrust calculation)
           lx = Math.abs(axX) > this.deadzone ? axX : 0;  // Normal X (left/right)
           ly = Math.abs(axY) > this.deadzone ? -axY : 0; // Invert Y (forward/back)
+          controllerButtons.left = buttonState;
         } else if (handed === 'right') {
           // Camera movement from right stick
           cameraMoveX = Math.abs(axX) > this.deadzone ? axX : 0; // Horizontal camera orbit
@@ -89,6 +128,14 @@ export class XRInput {
           if (Math.abs(axX) > this.deadzone || Math.abs(axY) > this.deadzone) {
             console.log('Right stick detected:', { axX, axY, cameraMoveX, cameraMoveY });
           }
+
+          // Pan modifier: prefer squeeze (1), fallback to trigger (0) on right controller
+          if (gp.buttons?.length) {
+            const squeeze = (gp.buttons[1] && gp.buttons[1].pressed) || false;
+            cameraPan = cameraPan || squeeze || false; // prefer squeeze for pan
+            // do not use trigger to avoid conflict with gameplay later; keep as fallback off
+          }
+          controllerButtons.right = buttonState;
         }
 
         // Fast when trigger (0) or squeeze (1) pressed, or A/B (4/5 on some)
@@ -108,6 +155,9 @@ export class XRInput {
       // Camera movement with arrow keys
       cameraMoveX = (this.key.has('arrowright') ? 1 : 0) + (this.key.has('arrowleft') ? -1 : 0);
       cameraMoveY = (this.key.has('arrowup') ? -1 : 0) + (this.key.has('arrowdown') ? 1 : 0);
+
+      // Pan mode with Alt key on desktop
+      cameraPan = this.key.has('alt');
     }
 
     // Map to head-yaw local thrust
@@ -128,6 +178,6 @@ export class XRInput {
     (camera as THREE.Object3D).getWorldQuaternion(q);
     const quat: [number, number, number, number] = [q.x, q.y, q.z, q.w];
     
-    return { thrust, fast, turn, quat, cameraMove: [cameraMoveX, cameraMoveY] };
+    return { thrust, fast, turn, quat, cameraMove: [cameraMoveX, cameraMoveY], cameraPan, controllerButtons };
   }
 }
