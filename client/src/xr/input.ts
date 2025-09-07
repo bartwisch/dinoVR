@@ -7,6 +7,7 @@ export interface InputState {
   fast: boolean;
   turn: number; // snap turn steps (degrees positive right)
   quat: [number, number, number, number]; // head orientation
+  cameraMove: [number, number]; // camera movement from right stick [horizontal, vertical]
 }
 
 const tmpEuler = new THREE.Euler();
@@ -34,6 +35,7 @@ export class XRInput {
     let lx = 0, ly = 0; // left stick X (strafe), Y (forward)
     let fast = false;
     let turn = 0;
+    let cameraMoveX = 0, cameraMoveY = 0; // right stick for camera movement
 
     if (session) {
       for (const src of session.inputSources) {
@@ -47,18 +49,28 @@ export class XRInput {
         const axX = axes[axIndex] || 0;
         const axY = axes[axIndex + 1] || 0;
 
+        // Debug: log all gamepad info for troubleshooting (less verbose)
+        if (handed === 'right' && (Math.abs(axX) > 0.1 || Math.abs(axY) > 0.1)) {
+          console.log(`Right controller:`, {
+            axesCount: axes.length,
+            axX: axX.toFixed(3),
+            axY: axY.toFixed(3)
+          });
+        }
+
         if (handed === 'left' || handed === 'none') {
           // Movement from left stick (standard mapping, corrections applied later in thrust calculation)
           lx = Math.abs(axX) > this.deadzone ? axX : 0;  // Normal X (left/right)
           ly = Math.abs(axY) > this.deadzone ? -axY : 0; // Invert Y (forward/back)
         } else if (handed === 'right') {
-          // Snap turn from right stick X with gating
-          const rx = Math.abs(axX) > this.deadzone ? axX : 0;
-          if (this.snapReady && Math.abs(rx) >= this.snapThreshold) {
-            turn = rx > 0 ? 30 : -30; // 30-degree step
-            this.snapReady = false;
+          // Camera movement from right stick
+          cameraMoveX = Math.abs(axX) > this.deadzone ? axX : 0; // Horizontal camera orbit
+          cameraMoveY = Math.abs(axY) > this.deadzone ? axY : 0; // Vertical camera movement
+          
+          // Debug logging for right stick
+          if (Math.abs(axX) > this.deadzone || Math.abs(axY) > this.deadzone) {
+            console.log('Right stick detected:', { axX, axY, cameraMoveX, cameraMoveY });
           }
-          if (!this.snapReady && Math.abs(rx) < 0.3) this.snapReady = true;
         }
 
         // Fast when trigger (0) or squeeze (1) pressed, or A/B (4/5 on some)
@@ -69,12 +81,15 @@ export class XRInput {
       }
     }
 
-    // Desktop fallback: WASD + Shift for fast, QE for snap turn
+    // Desktop fallback: WASD + Shift for fast, Arrow keys for camera
     if (this.key.size) {
       lx = (this.key.has('d') ? 1 : 0) + (this.key.has('a') ? -1 : 0);
       ly = (this.key.has('w') ? 1 : 0) + (this.key.has('s') ? -1 : 0);
       fast = this.key.has('shift');
-      if (this.key.has('e')) turn = 30; else if (this.key.has('q')) turn = -30;
+      
+      // Camera movement with arrow keys
+      cameraMoveX = (this.key.has('arrowright') ? 1 : 0) + (this.key.has('arrowleft') ? -1 : 0);
+      cameraMoveY = (this.key.has('arrowup') ? -1 : 0) + (this.key.has('arrowdown') ? 1 : 0);
     }
 
     // Map to head-yaw local thrust
@@ -95,6 +110,6 @@ export class XRInput {
     (camera as THREE.Object3D).getWorldQuaternion(q);
     const quat: [number, number, number, number] = [q.x, q.y, q.z, q.w];
     
-    return { thrust, fast, turn, quat };
+    return { thrust, fast, turn, quat, cameraMove: [cameraMoveX, cameraMoveY] };
   }
 }

@@ -24,20 +24,125 @@ document.body.appendChild(VRButton.createButton(renderer));
 const rig = new THREE.Group();
 rig.position.set(0, 1.6, 0); // Center the rig at player position
 
+// Camera orbital controls
+let cameraRadius = 3; // Distance from player
+let cameraTheta = Math.PI; // Horizontal angle (starts behind player)  
+let cameraPhi = Math.PI / 2.2; // Vertical angle (slightly above)
+
 // Position camera for third-person view (behind and above the player)
-camera.position.set(0, 0.4, -3); // Behind and slightly above relative to rig
-camera.lookAt(0, -0.4, 0); // Look forward at player height
+function updateCameraPosition() {
+  const x = cameraRadius * Math.sin(cameraPhi) * Math.cos(cameraTheta);
+  const y = cameraRadius * Math.cos(cameraPhi);
+  const z = cameraRadius * Math.sin(cameraPhi) * Math.sin(cameraTheta);
+  
+  camera.position.set(x, y, z);
+  camera.lookAt(0, 0, 0); // Always look at player center
+}
+
+updateCameraPosition(); // Set initial position
 
 rig.add(camera);
 scene.add(rig);
 
 // Lights
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-dir.position.set(1, 2, 1); scene.add(dir);
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(10, 20, 5); 
+dir.castShadow = true;
+dir.shadow.camera.left = -50;
+dir.shadow.camera.right = 50;
+dir.shadow.camera.top = 50;
+dir.shadow.camera.bottom = -50;
+dir.shadow.camera.near = 0.1;
+dir.shadow.camera.far = 200;
+dir.shadow.mapSize.width = 2048;
+dir.shadow.mapSize.height = 2048;
+scene.add(dir);
 
-// Reference grid
-const grid = new THREE.GridHelper(20, 20, 0x224466, 0x223344); grid.position.y = 0; scene.add(grid);
+// Enable shadows
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// Generate procedural landscape
+function generateLandscape() {
+  // Create ground plane with grass texture
+  const groundSize = 100;
+  const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, 50, 50);
+  
+  // Add some height variation to the ground
+  const groundVertices = groundGeometry.attributes.position;
+  for (let i = 0; i < groundVertices.count; i++) {
+    const x = groundVertices.getX(i);
+    const z = groundVertices.getZ(i);
+    const height = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 0.5 + Math.random() * 0.2;
+    groundVertices.setY(i, height);
+  }
+  groundGeometry.computeVertexNormals();
+  
+  const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x4a5d23 }); // Grass green
+  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+  
+  // Generate trees randomly across the landscape
+  const treeCount = 50;
+  for (let i = 0; i < treeCount; i++) {
+    const tree = createTree();
+    const x = (Math.random() - 0.5) * groundSize * 0.8;
+    const z = (Math.random() - 0.5) * groundSize * 0.8;
+    
+    // Don't place trees too close to center (where players spawn)
+    if (Math.sqrt(x * x + z * z) > 5) {
+      tree.position.set(x, 0, z);
+      scene.add(tree);
+    }
+  }
+  
+  // Add some scattered rocks
+  const rockCount = 20;
+  for (let i = 0; i < rockCount; i++) {
+    const rock = createRock();
+    const x = (Math.random() - 0.5) * groundSize * 0.7;
+    const z = (Math.random() - 0.5) * groundSize * 0.7;
+    rock.position.set(x, Math.random() * 0.3, z);
+    scene.add(rock);
+  }
+}
+
+function createTree() {
+  const tree = new THREE.Group();
+  
+  // Tree trunk
+  const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.4, 4, 8);
+  const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8b4513 }); // Brown
+  const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+  trunk.position.y = 2;
+  trunk.castShadow = true;
+  tree.add(trunk);
+  
+  // Tree crown (leaves)
+  const crownGeometry = new THREE.SphereGeometry(2.5, 8, 6);
+  const crownMaterial = new THREE.MeshLambertMaterial({ color: 0x228b22 }); // Forest green
+  const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+  crown.position.y = 5;
+  crown.castShadow = true;
+  crown.scale.setScalar(0.8 + Math.random() * 0.4); // Random size variation
+  tree.add(crown);
+  
+  return tree;
+}
+
+function createRock() {
+  const rockGeometry = new THREE.DodecahedronGeometry(0.5 + Math.random() * 0.5, 0);
+  const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 }); // Gray
+  const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+  rock.castShadow = true;
+  rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+  return rock;
+}
+
+generateLandscape();
 
 // Global controller state for sharing between render loop and input sampling
 let currentControllers: {
@@ -185,6 +290,20 @@ renderer.setAnimationLoop((timestamp, frame) => {
   }
   const thrustVec = new THREE.Vector3().fromArray(s.thrust);
   locomotion.step(thrustVec, s.fast, dt);
+  
+  // Camera zoom from right stick
+  if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
+    console.log('Camera move detected:', s.cameraMove);
+    const zoomSensitivity = 3; // Zoom sensitivity
+    
+    // Use Y-axis (forward/back) of right stick for zoom
+    cameraRadius += s.cameraMove[1] * zoomSensitivity * dt;
+    
+    // Clamp camera distance (min 1.5, max 10)
+    cameraRadius = Math.max(1.5, Math.min(10, cameraRadius));
+    
+    updateCameraPosition();
+  }
 
   // Update local player position and controllers
   if (localPlayer) {
