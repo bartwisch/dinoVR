@@ -38,13 +38,13 @@ const right = new THREE.Vector3();
 // - Otherwise fall back to [0,1].
 // - Returns a safe pair in [-1,1].
 function pickStickAxes(axes: number[]): [number, number] {
-  const ax2 = axes.length >= 4 ? [axes[2] ?? 0, axes[3] ?? 0] as [number, number] : [0, 0];
-  const ax0 = [axes[0] ?? 0, axes[1] ?? 0] as [number, number];
+  const ax2: [number, number] = axes.length >= 4 ? [axes[2] ?? 0, axes[3] ?? 0] : [0, 0];
+  const ax0: [number, number] = [axes[0] ?? 0, axes[1] ?? 0];
   // If both present, pick the one with larger magnitude; otherwise whichever exists.
   if (axes.length >= 4) {
     const m2 = Math.abs(ax2[0]) + Math.abs(ax2[1]);
     const m0 = Math.abs(ax0[0]) + Math.abs(ax0[1]);
-    return (m2 >= m0 ? ax2 : ax0);
+    return m2 >= m0 ? ax2 : ax0;
   }
   return ax0;
 }
