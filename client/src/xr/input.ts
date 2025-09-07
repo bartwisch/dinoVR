@@ -115,26 +115,31 @@ export class XRInput {
         }
 
         if (handed === 'left' || handed === 'none') {
-          // Movement from left stick (standard mapping, corrections applied later in thrust calculation)
-          lx = Math.abs(axX) > this.deadzone ? axX : 0;  // Normal X (left/right)
-          ly = Math.abs(axY) > this.deadzone ? -axY : 0; // Invert Y (forward/back)
-          controllerButtons.left = buttonState;
-        } else if (handed === 'right') {
-          // Camera movement from right stick
-          cameraMoveX = Math.abs(axX) > this.deadzone ? axX : 0; // Horizontal camera orbit
+          // Camera movement from left stick (SWAPPED)
+          cameraMoveX = Math.abs(axX) > this.deadzone ? axX : 0; // Horizontal camera movement
           cameraMoveY = Math.abs(axY) > this.deadzone ? axY : 0; // Vertical camera movement
           
-          // Debug logging for right stick
+          // Debug logging for left stick camera
           if (Math.abs(axX) > this.deadzone || Math.abs(axY) > this.deadzone) {
-            console.log('Right stick detected:', { axX, axY, cameraMoveX, cameraMoveY });
+            console.log('Left stick camera detected:', { axX, axY, cameraMoveX, cameraMoveY });
           }
 
-          // Pan modifier: prefer squeeze (1), fallback to trigger (0) on right controller
+          // Pan modifier: prefer squeeze (1) on left controller
           if (gp.buttons?.length) {
             const squeeze = (gp.buttons[1] && gp.buttons[1].pressed) || false;
-            cameraPan = cameraPan || squeeze || false; // prefer squeeze for pan
-            // do not use trigger to avoid conflict with gameplay later; keep as fallback off
+            cameraPan = cameraPan || squeeze || false;
           }
+          controllerButtons.left = buttonState;
+        } else if (handed === 'right') {
+          // Player movement from right stick (SWAPPED)
+          lx = Math.abs(axX) > this.deadzone ? axX : 0;  // Normal X (left/right)
+          ly = Math.abs(axY) > this.deadzone ? -axY : 0; // Invert Y (forward/back)
+          
+          // Debug logging for right stick movement
+          if (Math.abs(axX) > this.deadzone || Math.abs(axY) > this.deadzone) {
+            console.log('Right stick movement detected:', { axX, axY, lx, ly });
+          }
+          
           controllerButtons.right = buttonState;
         }
 
@@ -146,15 +151,16 @@ export class XRInput {
       }
     }
 
-    // Desktop fallback: WASD + Shift for fast, Arrow keys for camera
+    // Desktop fallback: Arrow keys for movement, WASD for camera (SWAPPED)
     if (this.key.size) {
-      lx = (this.key.has('d') ? 1 : 0) + (this.key.has('a') ? -1 : 0);
-      ly = (this.key.has('w') ? 1 : 0) + (this.key.has('s') ? -1 : 0);
+      // Player movement with arrow keys (SWAPPED)
+      lx = (this.key.has('arrowright') ? 1 : 0) + (this.key.has('arrowleft') ? -1 : 0);
+      ly = (this.key.has('arrowup') ? 1 : 0) + (this.key.has('arrowdown') ? -1 : 0);
       fast = this.key.has('shift');
       
-      // Camera movement with arrow keys
-      cameraMoveX = (this.key.has('arrowright') ? 1 : 0) + (this.key.has('arrowleft') ? -1 : 0);
-      cameraMoveY = (this.key.has('arrowup') ? -1 : 0) + (this.key.has('arrowdown') ? 1 : 0);
+      // Camera movement with WASD (SWAPPED)
+      cameraMoveX = (this.key.has('d') ? 1 : 0) + (this.key.has('a') ? -1 : 0);
+      cameraMoveY = (this.key.has('s') ? -1 : 0) + (this.key.has('w') ? 1 : 0);
 
       // Pan mode with Alt key on desktop
       cameraPan = this.key.has('alt');

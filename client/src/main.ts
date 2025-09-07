@@ -34,6 +34,10 @@ const USE_NEW_CONTROLLER = getFlag('newController', false);
 let cameraYaw = 0;   // Horizontal rotation
 let cameraPitch = 0; // Vertical rotation
 
+// Position camera higher and further back from player
+camera.position.set(0, 2.5, 4); // x=0 (centered), y=2.5 (higher), z=4 (further back)
+camera.lookAt(0, 1.6, 0); // Look at player head height
+
 rig.add(camera);
 scene.add(rig);
 
@@ -316,6 +320,14 @@ renderer.setAnimationLoop((timestamp, frame) => {
   // Update HUD with current button states
   hud.update(s.controllerButtons);
   
+  // Debug: Log all inputs
+  if (s.thrust[0] !== 0 || s.thrust[1] !== 0 || s.thrust[2] !== 0) {
+    console.log('Player movement (from RIGHT stick):', s.thrust);
+  }
+  if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
+    console.log('Camera input (from LEFT stick):', s.cameraMove);
+  }
+  
   if (s.turn) {
     rig.rotateY(THREE.MathUtils.degToRad(s.turn));
   }
@@ -326,10 +338,18 @@ renderer.setAnimationLoop((timestamp, frame) => {
     locomotion.step(thrustVec, s.fast, dt);
   }
 
-  // Simple direct camera control with right thumbstick
+  // Simple direct camera control with LEFT thumbstick (SWAPPED)
   if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
     const sensitivity = 2.0; // Adjust for sensitivity
     const maxPitch = Math.PI / 2 - 0.1; // Prevent looking straight up/down
+    
+    // Debug logging
+    console.log('🎥 CAMERA CONTROL (LEFT stick):', {
+      moveX: s.cameraMove[0],
+      moveY: s.cameraMove[1],
+      oldYaw: cameraYaw,
+      oldPitch: cameraPitch
+    });
     
     // Apply thumbstick input directly to camera rotation
     cameraYaw += s.cameraMove[0] * sensitivity * dt; // Right = positive yaw
@@ -340,6 +360,13 @@ renderer.setAnimationLoop((timestamp, frame) => {
     
     // Apply rotations to camera
     camera.rotation.set(cameraPitch, cameraYaw, 0);
+    
+    console.log('✅ Camera rotation applied:', {
+      newYaw: cameraYaw,
+      newPitch: cameraPitch,
+      cameraRotation: { x: camera.rotation.x, y: camera.rotation.y, z: camera.rotation.z },
+      cameraPosition: { x: camera.position.x, y: camera.position.y, z: camera.position.z }
+    });
   }
 
   // Update local player position and controllers

@@ -58,9 +58,10 @@ export class ControllerHUD {
       thumbstickY: 0,
     };
 
-    // Controller title
+    // Controller title with function
     context.fillStyle = buttons ? color : '#444444';
-    const title = buttons ? `${label} ✓` : `${label} ✗`;
+    const function_label = label === 'LEFT' ? '(CAMERA)' : '(MOVEMENT)';
+    const title = buttons ? `${label} ✓ ${function_label}` : `${label} ✗ ${function_label}`;
     context.strokeText(title, x, currentY);
     context.fillText(title, x, currentY);
     currentY += lineHeight + 2;
