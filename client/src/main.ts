@@ -7,7 +7,6 @@ import { RemotesManager, type ServerSnapshot } from './scene/remotes';
 import { connectSocket } from './net/client';
 import { TimeSync } from './net/time';
 import { getFlag } from './util/flags';
-import { CameraController } from './player/camera';
 import { PlayerController } from './player/controller';
 import { ControllerHUD } from './xr/hud';
 
@@ -31,29 +30,9 @@ rig.position.set(0, 1.6, 0); // Center the rig at player position
 // Feature flag for new controller path
 const USE_NEW_CONTROLLER = getFlag('newController', false);
 
-// Camera orbital controls (legacy path variables)
-const ORBIT_SPEED = 2.5;           // horizontal orbit speed
-const PITCH_SPEED = 1.8;           // vertical orbit speed
-const ZOOM_SPEED = 3.0;            // zoom speed
-const MIN_PHI = THREE.MathUtils.degToRad(15);  // avoid looking too high
-const MAX_PHI = THREE.MathUtils.degToRad(85);  // avoid flipping overhead
-let cameraRadius = 3; // Distance from player
-let cameraTheta = Math.PI; // Horizontal angle (starts behind player)  
-let cameraPhi = Math.PI / 2.2; // Vertical angle (slightly above)
-
-function updateCameraPositionLegacy() {
-  const x = cameraRadius * Math.sin(cameraPhi) * Math.cos(cameraTheta);
-  const y = cameraRadius * Math.cos(cameraPhi);
-  const z = cameraRadius * Math.sin(cameraPhi) * Math.sin(cameraTheta);
-  camera.position.set(x, y, z);
-  // Look at rig's world origin for correctness when rig moves
-  const rigWorld = new THREE.Vector3();
-  rig.getWorldPosition(rigWorld);
-  camera.lookAt(rigWorld);
-}
-
-// Initialize camera position
-updateCameraPositionLegacy();
+// Simple camera rotation variables
+let cameraYaw = 0;   // Horizontal rotation
+let cameraPitch = 0; // Vertical rotation
 
 rig.add(camera);
 scene.add(rig);
@@ -192,17 +171,9 @@ if (typeof window !== 'undefined') {
 }
 
 // New controller modules (used when flag is on)
-let cameraCtl: CameraController | null = null;
 let playerCtl: PlayerController | null = null;
+
 if (USE_NEW_CONTROLLER) {
-  cameraCtl = new CameraController(
-    camera,
-    () => {
-      const v = new THREE.Vector3();
-      rig.getWorldPosition(v);
-      return v;
-    }
-  );
   playerCtl = new PlayerController(rig);
 }
 
@@ -355,21 +326,20 @@ renderer.setAnimationLoop((timestamp, frame) => {
     locomotion.step(thrustVec, s.fast, dt);
   }
 
-  // Camera control
-  if (USE_NEW_CONTROLLER && cameraCtl) {
-    cameraCtl.update(dt, s.cameraMove as [number, number], s.cameraPan);
-  } else if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
-    const moveX = s.cameraMove[0];
-    const moveY = s.cameraMove[1];
-    cameraTheta += moveX * ORBIT_SPEED * dt;
-    cameraPhi += -moveY * PITCH_SPEED * dt;
-    cameraPhi = THREE.MathUtils.clamp(cameraPhi, MIN_PHI, MAX_PHI);
-    cameraRadius += moveY * ZOOM_SPEED * dt;
-    cameraRadius = THREE.MathUtils.clamp(cameraRadius, 1.5, 10);
-    if (!Number.isFinite(cameraTheta)) cameraTheta = Math.PI;
-    if (!Number.isFinite(cameraPhi)) cameraPhi = THREE.MathUtils.clamp(Math.PI / 2.2, MIN_PHI, MAX_PHI);
-    if (!Number.isFinite(cameraRadius)) cameraRadius = 3;
-    updateCameraPositionLegacy();
+  // Simple direct camera control with right thumbstick
+  if (s.cameraMove[0] !== 0 || s.cameraMove[1] !== 0) {
+    const sensitivity = 2.0; // Adjust for sensitivity
+    const maxPitch = Math.PI / 2 - 0.1; // Prevent looking straight up/down
+    
+    // Apply thumbstick input directly to camera rotation
+    cameraYaw += s.cameraMove[0] * sensitivity * dt; // Right = positive yaw
+    cameraPitch -= s.cameraMove[1] * sensitivity * dt; // Up = negative pitch (inverted)
+    
+    // Clamp pitch to prevent camera flip
+    cameraPitch = THREE.MathUtils.clamp(cameraPitch, -maxPitch, maxPitch);
+    
+    // Apply rotations to camera
+    camera.rotation.set(cameraPitch, cameraYaw, 0);
   }
 
   // Update local player position and controllers
